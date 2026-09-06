@@ -22,7 +22,8 @@ def init_db():
                 scenario_time TEXT DEFAULT '06:00',
                 scenario_count INTEGER DEFAULT 10,
                 scenarios_on INTEGER DEFAULT 0,
-                challenge_start_date TEXT
+                challenge_start_date TEXT,
+                joined_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE TABLE IF NOT EXISTS sent_scenarios (
@@ -49,6 +50,10 @@ def init_db():
             );
             """
         )
+        # Migratsiya: eski bazalarda joined_at ustuni bo'lmasligi mumkin
+        existing_cols = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
+        if "joined_at" not in existing_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN joined_at TEXT")
 
 
 @contextmanager
@@ -91,7 +96,32 @@ def toggle_reminders(chat_id: int, on: bool):
 
 def get_all_users():
     with get_conn() as conn:
-        return conn.execute("SELECT * FROM users").fetchall()
+        return conn.execute("SELECT * FROM users ORDER BY joined_at DESC").fetchall()
+
+
+def get_user_count() -> int:
+    with get_conn() as conn:
+        return conn.execute("SELECT COUNT(*) as c FROM users").fetchone()["c"]
+
+
+def get_stats_summary() -> dict:
+    with get_conn() as conn:
+        total_users = conn.execute("SELECT COUNT(*) as c FROM users").fetchone()["c"]
+        scenarios_on = conn.execute("SELECT COUNT(*) as c FROM users WHERE scenarios_on = 1").fetchone()["c"]
+        reminders_on = conn.execute("SELECT COUNT(*) as c FROM users WHERE reminders_on = 1").fetchone()["c"]
+        active_challenges = conn.execute(
+            "SELECT COUNT(*) as c FROM users WHERE challenge_start_date IS NOT NULL"
+        ).fetchone()["c"]
+        total_tasks = conn.execute("SELECT COUNT(*) as c FROM tasks").fetchone()["c"]
+        total_competitors = conn.execute("SELECT COUNT(*) as c FROM competitors").fetchone()["c"]
+        return {
+            "total_users": total_users,
+            "scenarios_on": scenarios_on,
+            "reminders_on": reminders_on,
+            "active_challenges": active_challenges,
+            "total_tasks": total_tasks,
+            "total_competitors": total_competitors,
+        }
 
 
 def get_user(chat_id: int):
