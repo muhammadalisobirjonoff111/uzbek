@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo
 
 import aiohttp
 from aiogram import Bot, Dispatcher, F
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -65,6 +66,16 @@ def now_hhmm() -> str:
 
 def today_local() -> date:
     return datetime.now(TZ).date()
+
+
+async def safe_edit(message: Message, text: str, reply_markup=None, parse_mode: str = "HTML"):
+    """edit_text ni chaqiradi; agar matn/tugmalar avvalgisi bilan bir xil bo'lsa,
+    Telegram beradigan zararsiz xatolikni e'tiborsiz qoldiradi."""
+    try:
+        await message.edit_text(text, parse_mode=parse_mode, reply_markup=reply_markup)
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e):
+            raise
 
 
 class Form(StatesGroup):
@@ -246,7 +257,7 @@ async def send_scenarios_menu(chat_id: int, edit_message: Message | None = None)
     )
     kb = scenarios_menu_kb(user)
     if edit_message:
-        await edit_message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+        await safe_edit(edit_message, text, reply_markup=kb)
     else:
         await bot.send_message(chat_id, text, parse_mode="HTML", reply_markup=kb)
 
@@ -397,7 +408,7 @@ async def send_challenge_menu(chat_id: int, edit_message: Message | None = None)
         text = "📅 <b>100 kunlik challenge</b>\n\nHali boshlanmagan. Boshlashga tayyormisiz?"
     kb = challenge_menu_kb(user)
     if edit_message:
-        await edit_message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+        await safe_edit(edit_message, text, reply_markup=kb)
     else:
         await bot.send_message(chat_id, text, parse_mode="HTML", reply_markup=kb)
 
@@ -451,7 +462,7 @@ async def send_tasks_menu(chat_id: int, edit_message: Message | None = None):
     )
     kb = tasks_menu_kb(user)
     if edit_message:
-        await edit_message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+        await safe_edit(edit_message, text, reply_markup=kb)
     else:
         await bot.send_message(chat_id, text, parse_mode="HTML", reply_markup=kb)
 
@@ -650,7 +661,7 @@ async def send_competitors_menu(chat_id: int, edit_message: Message | None = Non
     text = "👀 <b>Raqobatchilarni kuzatish</b>\n\nOchiq Telegram kanallarini qo'shing — yangi post chiqsa xabar beraman."
     kb = competitors_menu_kb()
     if edit_message:
-        await edit_message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+        await safe_edit(edit_message, text, reply_markup=kb)
     else:
         await bot.send_message(chat_id, text, parse_mode="HTML", reply_markup=kb)
 
