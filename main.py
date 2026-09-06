@@ -15,6 +15,7 @@ import os
 import random
 import re
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import aiohttp
 from aiogram import Bot, Dispatcher
@@ -41,6 +42,16 @@ dp = Dispatcher()
 scheduler = AsyncIOScheduler(timezone=TIMEZONE)
 
 TIME_RE = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
+TZ = ZoneInfo(TIMEZONE)
+
+
+def now_hhmm() -> str:
+    """Belgilangan vaqt zonasi (masalan Asia/Tashkent) bo'yicha joriy vaqtni HH:MM formatida qaytaradi."""
+    return datetime.now(TZ).strftime("%H:%M")
+
+
+def today_local() -> date:
+    return datetime.now(TZ).date()
 
 HELP_TEXT = (
     "🤖 <b>Buyruqlar</b>\n\n"
@@ -210,7 +221,7 @@ def format_scenarios(chat_id: int, scenarios: list[dict]) -> str:
     header = "🎬 <b>Bugungi reels ssenariylari</b>"
     if user and user["challenge_start_date"]:
         start = date.fromisoformat(user["challenge_start_date"])
-        day_num = (date.today() - start).days + 1
+        day_num = (today_local() - start).days + 1
         header = f"🎬 <b>100 kunlik challenge — Kun {day_num}/100</b>\nBugungi ssenariylar:"
 
     blocks = [header, ""]
@@ -268,7 +279,7 @@ async def cmd_scenariosoff(message: Message):
 
 @dp.message(Command("startchallenge"))
 async def cmd_startchallenge(message: Message):
-    db.start_challenge(message.chat.id, date.today().isoformat())
+    db.start_challenge(message.chat.id, today_local().isoformat())
     await message.answer(
         "🏁 100 kunlik challenge boshlandi! Kun 1/100.\n"
         "Kunlik ssenariylarni yoqish uchun: /scenariotime 06:00"
@@ -282,12 +293,12 @@ async def cmd_challengeday(message: Message):
         await message.answer("Challenge hali boshlanmagan. /startchallenge bilan boshlang.")
         return
     start = date.fromisoformat(user["challenge_start_date"])
-    day_num = (date.today() - start).days + 1
+    day_num = (today_local() - start).days + 1
     await message.answer(f"📅 Siz hozir {day_num}/100-kundasiz.")
 
 
 async def check_and_send_scenarios():
-    now_str = datetime.now().strftime("%H:%M")
+    now_str = now_hhmm()
     for user in db.get_all_users():
         if not user["scenarios_on"]:
             continue
@@ -366,7 +377,7 @@ async def check_competitors():
 # ---------------- SCHEDULER (daily reminders) ----------------
 
 async def check_and_send_reminders():
-    now_str = datetime.now().strftime("%H:%M")
+    now_str = now_hhmm()
     for user in db.get_all_users():
         if not user["reminders_on"]:
             continue
