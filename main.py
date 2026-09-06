@@ -43,6 +43,7 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 TIMEZONE = os.getenv("TIMEZONE", "Asia/Tashkent")
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 COMPETITOR_CHECK_MINUTES = 5  # har necha daqiqada kanallarni tekshirish
 
 logging.basicConfig(level=logging.INFO)
@@ -830,6 +831,64 @@ async def check_competitors():
 async def cb_back_main(callback: CallbackQuery):
     await callback.message.delete()
     await callback.answer()
+
+
+# ==================== ADMIN (faqat sizga) ====================
+
+def is_admin(user_id: int) -> bool:
+    return ADMIN_ID != 0 and user_id == ADMIN_ID
+
+
+@dp.message(Command("stats"))
+async def cmd_stats(message: Message):
+    if not is_admin(message.from_user.id):
+        return  # boshqa hech kimga javob bermaydi, botni "yashirin" tutadi
+    s = db.get_stats_summary()
+    text = (
+        "📊 <b>Bot statistikasi</b>\n\n"
+        f"👥 Jami foydalanuvchilar: <b>{s['total_users']}</b>\n"
+        f"🎬 Ssenariylar yoqilgan: <b>{s['scenarios_on']}</b>\n"
+        f"✅ Vazifa eslatmasi yoqilgan: <b>{s['reminders_on']}</b>\n"
+        f"🏁 Faol 100-kunlik challenge: <b>{s['active_challenges']}</b>\n"
+        f"📝 Jami vazifalar soni: <b>{s['total_tasks']}</b>\n"
+        f"👀 Jami kuzatilayotgan kanallar: <b>{s['total_competitors']}</b>\n\n"
+        "To'liq foydalanuvchilar ro'yxati uchun: /users"
+    )
+    await message.answer(text, parse_mode="HTML")
+
+
+@dp.message(Command("users"))
+async def cmd_users(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    users = db.get_all_users()
+    if not users:
+        await message.answer("Hozircha foydalanuvchilar yo'q.")
+        return
+
+    lines = [f"👥 <b>Foydalanuvchilar ({len(users)} ta):</b>\n"]
+    for u in users[:50]:
+        uname = f"@{u['username']}" if u["username"] else f"ID:{u['chat_id']}"
+        joined = (u["joined_at"] or "?")[:16].replace("T", " ")
+        badges = []
+        if u["scenarios_on"]:
+            badges.append("🎬")
+        if u["reminders_on"]:
+            badges.append("✅")
+        if u["challenge_start_date"]:
+            start = date.fromisoformat(u["challenge_start_date"])
+            day_num = (today_local() - start).days + 1
+            badges.append(f"🏁{day_num}/100")
+        badge_str = " ".join(badges) if badges else "—"
+        lines.append(f"{uname} | qo'shilgan: {joined} | {badge_str}")
+
+    if len(users) > 50:
+        lines.append(f"\n... va yana {len(users) - 50} ta foydalanuvchi")
+
+    text = "\n".join(lines)
+    # Telegram xabar uzunligi cheklovi (4096) — kerak bo'lsa bo'lib yuboramiz
+    for i in range(0, len(text), 4000):
+        await message.answer(text[i:i + 4000], parse_mode="HTML")
 
 
 async def main():
